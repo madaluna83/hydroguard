@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Water Quality Dashboard</title>
+    <!-- Bootstrap CSS for styling -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <!-- Chart.js for graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="text-center">Water Quality Dashboard</h1>
+        <p class="text-center">Interactive charts showing water quality metrics.</p>
+
+        <!-- Section for charts -->
+        <div class="row">
+            <!-- pH Chart -->
+            <div class="col-md-6">
+                <h3 class="text-center">pH Levels</h3>
+                <canvas id="phChart"></canvas>
+            </div>
+
+            <!-- Dissolved Oxygen Chart -->
+            <div class="col-md-6">
+                <h3 class="text-center">Dissolved Oxygen</h3>
+                <canvas id="oxygenChart"></canvas>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <!-- Carbon Dioxide Levels Chart -->
+            <div class="col-md-6">
+                <h3 class="text-center">Carbon Dioxide Levels</h3>
+                <canvas id="co2Chart"></canvas>
+            </div>
+
+            <!-- Turbidity Chart -->
+            <div class="col-md-6">
+                <h3 class="text-center">Turbidity</h3>
+                <canvas id="turbidityChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script to fetch data and generate charts -->
+    <script>
+        // Fetch data from the server
+        fetch('/data/stats')
+            .then(response => response.json())
+            .then(data => {
+                // Example: Create charts for each metric using Chart.js
+                createChart('phChart', 'pH Levels', data.ph);
+                createChart('oxygenChart', 'Dissolved Oxygen', data.dissolved_oxygen);
+                createChart('co2Chart', 'Carbon Dioxide Levels', data.carbon_dioxide_levels);
+                createChart('turbidityChart', 'Turbidity', data.turbidity);
+            });
+
+        // Function to create a chart
+        function createChart(canvasId, label, dataset) {
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            new Chart(ctx, {
+                type: 'line', // You can change to 'bar', 'pie', etc.
+                data: {
+                    labels: ['Min', 'Average', 'Max'], // X-axis labels
+                    datasets: [{
+                        label: label,
+                        data: [dataset.min, dataset.avg, dataset.max], // Y-axis values
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
