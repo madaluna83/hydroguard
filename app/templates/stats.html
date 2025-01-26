@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Statistici Calitatea Apei</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>Statistici Calitatea Apei</h1>
+    <canvas id="phChart" width="400" height="200"></canvas>
+    <script>
+        // Asigură-te că variabilele sunt injectate ca JSON valid
+        const timestamps = JSON.parse('{{ timestamps | tojson | safe }}');
+        const phValues = JSON.parse('{{ ph_values | tojson | safe }}');
+
+        const ctx = document.getElementById('phChart').getContext('2d');
+        const phChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: timestamps,
+                datasets: [{
+                    label: 'pH',
+                    data: phValues,
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: false
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

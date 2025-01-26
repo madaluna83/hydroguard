@@ -1,48 +1,35 @@
-import requests
+import paho.mqtt.client as mqtt
+import time
+import random
+import json  # Importăm json pentru serializare
 
-BASE_URL = "http://127.0.0.1:5000"
+MQTT_BROKER = "localhost"
+MQTT_PORT = 1883
+MQTT_TOPIC = "sensors/water_quality"
 
-response = requests.get(f"{BASE_URL}/data")
-if response.status_code == 200:
-    print("All data: ", response.json())
+def publish_sensor_data():
+    client = mqtt.Client()
+    client.connect(MQTT_BROKER, MQTT_PORT)
 
+    while True:
+        # Generăm date simulate
+        sensor_data = {
+            "sensor_id": random.randint(1, 5),
+            "timestamp": time.time(),
+            "ph": round(random.uniform(6.5, 8.5), 2),
+            "dissolved_oxygen": round(random.uniform(5.0, 10.0), 2),
+            "carbon_dioxide_levels": round(random.uniform(0.1, 1.0), 2),
+            "turbidity": round(random.uniform(0.1, 5.0), 2)
+        }
 
-sensor_id = 1
-response = requests.get(f"{BASE_URL}/data/{sensor_id}")
-if response.status_code == 200:
-    print(f"Data for sensor {sensor_id}:", response.json())
+        # Serializăm datele în JSON
+        sensor_data_json = json.dumps(sensor_data)
 
-response = requests.get(f"{BASE_URL}/data/stats", params = {"sensor_id": sensor_id})
-if response.status_code == 200:
-    stats = response.json()
-    print(f"Statistics for Sensor {sensor_id}:")
-    print("pH:", stats["ph"])
-    print("Dissolved Oxygen:", stats["dissolved_oxygen"])
-    print("Carbon Dioxide Levels:", stats["carbon_dioxide_levels"])
-    print("Turbidity:", stats["turbidity"])
+        # Publicăm mesajul pe topicul MQTT
+        client.publish(MQTT_TOPIC, sensor_data_json)
+        print(f"Trimis: {sensor_data_json}")
 
-response = requests.get(f"{BASE_URL}/data/alerts")
-if response.status_code == 200:
-    alerts = response.json()
-    if alerts:
-        print("Alerts:")
-        for alert in alerts:
-            print(alert)
-    else:
-        print("No alerts found!")
+        time.sleep(5)
 
-
-new_entry = {
-    "entry_id": 101,
-    "sensor_id": 1,
-    "timestamp": "2025-01-11 10:00:00",
-    "ph": 7.2,
-    "dissolved_oxygen": 8.1,
-    "carbon_dioxide_levels": 3.5,
-    "turbidity": 1.0
-}
-
-response = requests.post(f"{BASE_URL}/data", json=new_entry)
-if response.status_code == 201:
-    print("New entry added successfully!")
-
+if __name__ == "__main__":
+    publish_sensor_data()

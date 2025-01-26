@@ -1,161 +1,119 @@
 from flask import Flask, request, jsonify, render_template
+
 import psycopg2
 
 app = Flask(__name__)
 
-def get_db_connection():
-    return psycopg2.connect(
-        dbname = "water_quality",
-        user = "postgres", 
-        password = "12341234", 
-        host = "localhost",
-        port = "5432"
-    )
+# Configurare conexiune la baza de date
+DB_CONFIG = {
+    "dbname": "water_quality",
+    "user": "postgres",
+    "password": "diana",
+    "host": "localhost",
+    "port": "5432"
+}
 
-@app.route("/")
-def home():
-    return render_template("index.html")
-
-@app.route('/data', methods=['GET'])
-def get_all_data():
-    conn = get_db_connection()
+def save_to_db(data):
+    conn = psycopg2.connect(**DB_CONFIG)
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM water_data")
-    rows = cursor.fetchall()
-    conn.close()
-    data = [
-        {
-            "id": row[0],
-            "entry_id": row[1],
-            "sensor_id": row[2],
-            "timestamp": row[3],
-            "ph": row[4],
-            "dissolved_oxygen": row[5],
-            "carbon_dioxide_levels": row[6],
-            "turbidity": row[7]
-        }
-        for row in rows 
-    ]
-    return jsonify(data)
 
-@app.route('/data/<int:sensor_id>', methods=['GET'])
-def get_data_by_sensor(sensor_id):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM water_data WHERE sensor_id = %s", (sensor_id))
-    rows = cursor.fetchall()
-    conn.close()
-
-    data = [
-        {
-            "id": row[0],
-            "entry_id": row[1],
-            "sensor_id": row[2],
-            "timestamp": row[3],
-            "ph": row[4],
-            "dissolved_oxygen": row[5],
-            "carbon_dioxide_levels": row[6],
-            "turbidity": row[7]
-        }
-        for row in rows
-    ]
-
-    return jsonify(data)
-
-@app.route('/data', methods=['POST'])
-def add_data():
-    new_data = request.json
-    conn = get_db_connection()
-    cursor = conn.cursor()
     cursor.execute("""
-                    INSERT INTO water_data (entry_id, sensor_id, timestamp, ph, dissloved_oxygen, carbon_dioxide_levels, turbidity)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                   """, (
-                       new_data["entry_id"],
-                       new_data["sensor_id"],
-                       new_data["timestamp"],
-                       new_data["ph"],
-                       new_data["dissolved_oxygen"],
-                       new_data["carbon_dioxide_levels"],
-                       new_data["turbidity"]
-                   )
-                   )
+        INSERT INTO water_data (entry_id, sensor_id, timestamp, ph, dissolved_oxygen, carbon_dioxide_levels, turbidity)
+        VALUES (DEFAULT, %s, TO_TIMESTAMP(%s), %s, %s, %s, %s)
+    """, (
+        data["sensor_id"],
+        data["timestamp"],
+        data["ph"],
+        data["dissolved_oxygen"],
+        data["carbon_dioxide_levels"],
+        data["turbidity"]
+    ))
     conn.commit()
     conn.close()
-    return jsonify({"message": "Data added successfully"}), 201
 
-@app.route('/data/stats', methods = ['GET'])
-def get_statistics():
-    sensor_id = request.args.get('sensor_id', None)
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    
-    if sensor_id:
-        cursor.execute("""
-                SELECT
-                       AVG(ph), MIN(ph), MAX(ph),
-                       AVG(dissolved_oxygen), MIN(dissolved_oxygen), MAX(dissolved_oxygen),
-                       AVG(carbon_dioxide_levels), MIN(carbon_dioxide_levels), MAX(carbon_dioxide_levels),
-                       AVG(turbidity), MIN(turbidity), MAX(turbidity)
-                       from water_data
-                       WHERE sensor_id = %s
-                       """, (sensor_id))
-        
-    else: 
-        cursor.execute("""
-                SELECT
-                       AVG(ph), MIN(ph), MAX(ph),
-                       AVG(dissolved_oxygen), MIN(dissolved_oxygen), MAX(dissolved_oxygen),
-                       AVG(carbon_dioxide_levels), MIN(carbon_dioxide_levels), MAX(carbon_dioxide_levels),
-                       AVG(turbidity), MIN(turbidity), MAX(turbidity)
-                       from water_data
-            """
-        )
+@app.route("/api/data", methods=["POST"])
+def receive_data():
+    sensor_data = request.json
+    print(f"Date primite de la gateway: {sensor_data}")
+    save_to_db(sensor_data)
+    return jsonify({"message": "Date salvate cu succes"}), 200
 
-    stats = cursor.fetchone()
-    conn.close()
-
-    return jsonify({
-        "ph" : {"avg": stats[0], "min": stats[1], "max": stats[2]},
-        "dissolved_oxygen" : {"avg": stats[3], "min": stats[4], "max": stats[5]}, 
-        "carbon_dioxide_levels" : {"avg": stats[6], "min": stats[7], "max": stats[8]}, 
-        "turbidity" : {"avg": stats[9], "min": stats[10], "max": stats[11]}
-    })
-
-@app.route('/data/alerts', methods=['GET'])
-def get_alerts():
-    conn = get_db_connection()
+@app.route("/")
+def index():
+    conn = psycopg2.connect(**DB_CONFIG)
     cursor = conn.cursor()
 
-    cursor.execute(
-        """
-            SELECT entry_id, sensor_id, timestamp, ph, dissolved_oxygen, carbon_dioxide_levels, turbidity
-            FROM water_data
-            WHERE ph < 6.5 OR ph > 8.5 
-            OR dissolved_oxygen < 4.0
-            OR turbidity > 5.0 
-        """
-    )
-
-    alerts = cursor.fetchall()
+    # Calculăm statistici
+    cursor.execute("""
+        SELECT sensor_id, AVG(ph) AS avg_ph, AVG(dissolved_oxygen) AS avg_oxygen, AVG(turbidity) AS avg_turbidity
+        FROM water_data
+        GROUP BY sensor_id
+    """)
+    stats = cursor.fetchall()
     conn.close()
 
-    data = [
-        {
-            "entry_id": row[0], 
-            "sensor_id": row[1],
-            "timestamp": row[2], 
-            "ph": row[3],
-            "dissolved_oxygen": row[4], 
-            "carbon_dioxide_levels": row[5], 
-            "turbidity": row[6]
-        }
-        for row in alerts
-    ]
+    # Generăm conținut HTML
+    html_content = "<h1>Statistici Calitatea Apei</h1>"
+    for stat in stats:
+        html_content += f"""
+            <p>
+                Senzor {stat[0]}:<br>
+                - pH mediu: {stat[1]:.2f}<br>
+                - Oxigen dizolvat mediu: {stat[2]:.2f}<br>
+                - Turbiditate medie: {stat[3]:.2f}<br>
+            </p>
+        """
 
-    return jsonify(data)
+    return html_content
+
+@app.route("/stats", methods=["GET"])
+def stats():
+    conn = psycopg2.connect(**DB_CONFIG)
+    cursor = conn.cursor()
+
+    # Obține statistici pe fiecare senzor
+    cursor.execute("""
+        SELECT sensor_id, 
+               MIN(ph) AS min_ph, MAX(ph) AS max_ph, AVG(ph) AS avg_ph,
+               MIN(dissolved_oxygen) AS min_oxygen, MAX(dissolved_oxygen) AS max_oxygen, AVG(dissolved_oxygen) AS avg_oxygen,
+               MIN(turbidity) AS min_turbidity, MAX(turbidity) AS max_turbidity, AVG(turbidity) AS avg_turbidity
+        FROM water_data
+        GROUP BY sensor_id
+    """)
+    stats = cursor.fetchall()
+    conn.close()
+
+    html_content = "<h1>Statistici Calitatea Apei</h1>"
+    for stat in stats:
+        html_content += f"""
+            <h2>Senzor {stat[0]}</h2>
+            <p>pH: Min={stat[1]:.2f}, Max={stat[2]:.2f}, Medie={stat[3]:.2f}</p>
+            <p>Oxigen Dizolvat: Min={stat[4]:.2f}, Max={stat[5]:.2f}, Medie={stat[6]:.2f}</p>
+            <p>Turbiditate: Min={stat[7]:.2f}, Max={stat[8]:.2f}, Medie={stat[9]:.2f}</p>
+        """
+
+    return html_content
+
+
+@app.route("/stats/chart", methods=["GET"])
+def stats_chart():
+    conn = psycopg2.connect(**DB_CONFIG)
+    cursor = conn.cursor()
+
+    # Obține datele pentru grafic
+    cursor.execute("SELECT timestamp, ph FROM water_data ORDER BY timestamp")
+    data = cursor.fetchall()
+    conn.close()
+
+    # Extrage timestamp-urile și valorile pH-ului
+    timestamps = [row[0].strftime('%Y-%m-%d %H:%M:%S') for row in data]
+    ph_values = [row[1] for row in data]
+
+    # Trimite datele către template
+    return render_template("stats.html", timestamps=timestamps, ph_values=ph_values)
 
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000)
+

@@ -4,7 +4,7 @@ def init_db():
     conn = psycopg2.connect(
         dbname = "water_quality", 
         user = "postgres", 
-        password = "12341234", 
+        password = "diana", 
         host = "localhost",
         port = "5432"
     )
