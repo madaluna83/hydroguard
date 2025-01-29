@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HydroGuard - Water Quality Monitoring</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        /* Styling for notifications */
+        #notifications {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            max-height: 200px;
+            overflow-y: auto;
+            background-color: #f8f9fa;
+        }
+
+        .alert {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        .alert-warning {
+            background-color: #fff3cd;
+            border-color: #ffeeba;
+            color: #856404;
+        }
+
+        .alert-danger {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2 class="text-center">HydroGuard - Water Quality Monitoring</h2>
+
+        <!-- Notification Section -->
+        <div id="notifications">
+            <h5>Notifications</h5>
+            <div id="notification-list"></div>
+        </div>
+
+        <!-- Graph Container -->
+        <div id="graph-container" style="height: 500px;">
+            <canvas id="dataChart"></canvas>
+        </div>
+
+        <!-- Table for live data -->
+        <table class="table table-bordered mt-4">
+            <thead>
+                <tr>
+                    <th>Sensor ID</th>
+                    <th>pH</th>
+                    <th>Dissolved Oxygen</th>
+                    <th>CO₂ Levels</th>
+                    <th>Turbidity</th>
+                    <th>Timestamp</th>
+                </tr>
+            </thead>
+            <tbody id="sensor-data"></tbody>
+        </table>
+    </div>
+
+    <script>
+        // Initialize WebSocket connection
+        const socket = io("http://localhost:5000");
+
+        // Get the notifications container
+        const notificationList = document.getElementById("notification-list");
+
+        // WebSocket event: Handle alert notifications
+        socket.on("alert", function(alertData) {
+            const alertMessage = `
+                <div class="alert alert-danger">
+                    <strong>🚨 Alert!</strong> Sensor ${alertData.sensor_id} detected issues:
+                    <ul>
+                        ${alertData.warnings.map(warning => `<li>${warning}</li>`).join("")}
+                    </ul>
+                    <small><em>${new Date(alertData.timestamp * 1000).toLocaleString()}</em></small>
+                </div>
+            `;
+
+            // Add the alert to the notification list
+            notificationList.innerHTML = alertMessage + notificationList.innerHTML;
+
+            // Optional: Automatically scroll to the top of notifications
+            document.getElementById("notifications").scrollTop = 0;
+        });
+
+        // Fetch graph data and update the chart (existing code for Chart.js)
+        function updateGraph(data) {
+            dataChart.data.labels = data.timestamps.slice(-100); // Limit to last 100 points
+            dataChart.data.datasets[0].data = data.ph_values.slice(-100);
+            dataChart.data.datasets[1].data = data.oxygen_values.slice(-100);
+            dataChart.data.datasets[2].data = data.co2_values.slice(-100);
+            dataChart.data.datasets[3].data = data.turbidity_values.slice(-100);
+            dataChart.update();
+        }
+
+        function fetchGraphData() {
+            fetch('/api/stats')
+                .then(response => response.json())
+                .then(updateGraph);
+        }
+
+        // Initialize Chart.js graph
+        let ctx = document.getElementById('dataChart').getContext('2d');
+        let dataChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'pH',
+                        data: [],
+                        borderColor: 'blue',
+                        backgroundColor: 'rgba(0, 0, 255, 0.1)',
+                        fill: false,
+                        tension: 0.4
+                    },
+                    {
+                        label: 'Dissolved Oxygen',
+                        data: [],
+                        borderColor: 'green',
+                        backgroundColor: 'rgba(0, 255, 0, 0.1)',
+                        fill: false,
+                        tension: 0.4
+                    },
+                    {
+                        label: 'CO₂ Levels',
+                        data: [],
+                        borderColor: 'red',
+                        backgroundColor: 'rgba(255, 0, 0, 0.1)',
+                        fill: false,
+                        tension: 0.4
+                    },
+                    {
+                        label: 'Turbidity',
+                        data: [],
+                        borderColor: 'orange',
+                        backgroundColor: 'rgba(255, 165, 0, 0.1)',
+                        fill: false,
+                        tension: 0.4
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Time (HH:MM:SS)'
+                        }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'Measurement Value'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        position: 'top'
+                    }
+                }
+            }
+        });
+
+        // Fetch graph data every 5 seconds
+        fetchGraphData();
+        setInterval(fetchGraphData, 5000);
+    </script>
+</body>
+</html>

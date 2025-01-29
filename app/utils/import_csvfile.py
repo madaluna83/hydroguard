@@ -1,36 +1,31 @@
-import psycopg2
 import csv
+import psycopg2
 
-def import_csvfile(csv_file):
-    conn = psycopg2.connect(
-        dbname = "water_quality", 
-        user = "postgres", 
-        password = "diana", 
-        host = "localhost",
-        port = "5432"
-    )
+DB_CONFIG = {
+    "dbname": "water_quality",
+    "user": "postgres",
+    "password": "diana",
+    "host": "localhost",
+    "port": "5432"
+}
+
+def import_from_csv(filename="water_quality_data.csv"):
+    conn = psycopg2.connect(**DB_CONFIG)
     cursor = conn.cursor()
 
-    with open(csv_file, mode = 'r') as file: 
-        reader = csv.DictReader(file)
-        for row in reader: 
-            cursor.execute(
-                """
-                INSERT INTO water_data (entry_id, sensor_id, timestamp, ph, dissolved_oxygen, carbon_dioxide_levels, turbidity)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """, (
-                int(row["entry_id"]),
-                int(row["sensor_id"]),
-                row["timestamp"],
-                float(row["ph"]),
-                float(row["dissolved_oxygen"]),
-                float(row["carbon_dioxide_levels"]),
-                float(row["turbidity"])
-            ))
+    with open(filename, mode="r") as file:
+        reader = csv.reader(file)
+        next(reader)  # Skip header row
+
+        for row in reader:
+            cursor.execute("""
+                INSERT INTO water_data (sensor_id, timestamp, ph, dissolved_oxygen, carbon_dioxide_levels, turbidity)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, row)  # Ensure the order matches the updated DB schema
 
     conn.commit()
     conn.close()
-    print("Data has successfully imported from the file")
+    print(f"CSV file '{filename}' imported successfully!")
 
 if __name__ == "__main__":
-    import_csvfile("water_quality_data.csv")
+    import_from_csv()
