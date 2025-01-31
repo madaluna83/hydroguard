@@ -4,7 +4,7 @@ import psycopg2
 DB_CONFIG = {
     "dbname": "water_quality",
     "user": "postgres",
-    "password": "diana",
+    "password": "12341234",
     "host": "localhost",
     "port": "5432"
 }

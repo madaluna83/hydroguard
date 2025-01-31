@@ -11,6 +11,7 @@ MQTT_TOPIC = "sensors/water_quality"
 CLOUD_SERVER_URL = "http://localhost:5000/api/data"
 
 def on_message(client, userdata, message):
+    
     sensor_data = json.loads(message.payload.decode())
     print(f"Primit de la senzor: {sensor_data}")
 

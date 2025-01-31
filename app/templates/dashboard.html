@@ -80,7 +80,7 @@
         socket.on("alert", function(alertData) {
             const alertMessage = `
                 <div class="alert alert-danger">
-                    <strong>🚨 Alert!</strong> Sensor ${alertData.sensor_id} detected issues:
+                    <strong> Alert!</strong> Sensor ${alertData.sensor_id} detected issues:
                     <ul>
                         ${alertData.warnings.map(warning => `<li>${warning}</li>`).join("")}
                     </ul>
