@@ -51,9 +51,7 @@ def check_water_quality(data):
 
     return warnings
 
-#@app.route("/api/data", methods=["POST"])
-
-
+@app.route("/api/data", methods=["POST"])
 def receive_data():
     sensor_data = request.json
     print(f"Received Data: {sensor_data}")
@@ -105,73 +103,117 @@ def receive_data():
 
     return html_content
 
+
 @app.route("/stats/chart", methods=["GET"])
 def stats_chart():
-    # Connect to the database
     conn = psycopg2.connect(**DB_CONFIG)
     cursor = conn.cursor()
 
-    # Execute the SQL query to get stats
-    cursor.execute("""
-        SELECT sensor_id, 
-               MIN(ph), MAX(ph), AVG(ph),
-               MIN(dissolved_oxygen), MAX(dissolved_oxygen), AVG(dissolved_oxygen),
-               MIN(carbon_dioxide_levels), MAX(carbon_dioxide_levels), AVG(carbon_dioxide_levels),
-               MIN(turbidity), MAX(turbidity), AVG(turbidity)
-        FROM water_data
-        GROUP BY sensor_id
-    """)
-    
-    # Fetch all the results
-    stats = cursor.fetchall()
+    # Obține datele pentru grafic
+    cursor.execute("SELECT timestamp, ph FROM water_data ORDER BY timestamp")
+    data = cursor.fetchall()
     conn.close()
 
-    # Format the data into a list of dictionaries (this is how we'll send it as JSON)
-    data = []
-    for stat in stats:
-        data.append({
-            'sensor_id': stat[0],
-            'min_ph': stat[1],
-            'max_ph': stat[2],
-            'avg_ph': stat[3],
-            'min_oxygen': stat[4],
-            'max_oxygen': stat[5],
-            'avg_oxygen': stat[6],
-            'min_co2': stat[7],
-            'max_co2' : stat[8],
-            'avg_co2' : stat[9],
-            'min_turbidity': stat[10],
-            'max_turbidity': stat[11],
-            'avg_turbidity': stat[12]
+    # Extrage timestamp-urile și valorile pH-ului
+    timestamps = [row[0].strftime('%Y-%m-%d %H:%M:%S') for row in data]
+    ph_values = [row[1] for row in data]
+
+    # Trimite datele către template
+    return render_template("stats.html", timestamps=timestamps, ph_values=ph_values)
+
+@app.route("/api/stats", methods=["GET"])
+def stats():
+    """Fetches data for graph visualization"""
+    conn = psycopg2.connect(**DB_CONFIG)
+    cursor = conn.cursor()
+
+    # Fetch time series data for each attribute
+    cursor.execute("""
+        SELECT timestamp, ph, dissolved_oxygen, carbon_dioxide_levels, turbidity
+        FROM water_data ORDER BY timestamp
+    """)
+    data = cursor.fetchall()
+    conn.close()
+
+    # Convert to JSON
+    timestamps = [row[0].strftime('%Y-%m-%d %H:%M:%S') for row in data]
+    ph_values = [row[1] for row in data]
+    oxygen_values = [row[2] for row in data]
+    co2_values = [row[3] for row in data]
+    turbidity_values = [row[4] for row in data]
+
+    return jsonify({
+        "timestamps": timestamps,
+        "ph_values": ph_values,
+        "oxygen_values": oxygen_values,
+        "co2_values": co2_values,
+        "turbidity_values": turbidity_values
+    })
+
+
+@app.route('/api/ph-stats', methods=["GET"])
+def ph_stats():
+    """Fetches pH-specific data for visualization"""
+    conn = psycopg2.connect(**DB_CONFIG)
+    cursor = conn.cursor()
+
+    # Fetch time series data for pH only
+    cursor.execute("""
+        SELECT timestamp, ph, sensor_id
+        FROM water_data
+        ORDER BY timestamp
+    """)
+    data = cursor.fetchall()
+    conn.close()
+
+    # Convert to JSON format
+    timestamps = [row[0].strftime('%Y-%m-%d %H:%M:%S') for row in data]
+    ph_values = [row[1] for row in data]
+    sensor_ids = [row[2] for row in data]
+
+    return jsonify({
+        "timestamps": timestamps,
+        "ph_values": ph_values,
+        "sensor_ids": sensor_ids
+    })
+
+@app.route('/api/summary-stats', methods=["GET"])
+def summary_stats():
+    """Fetches min, avg, and max values dynamically for each attribute."""
+    conn = psycopg2.connect(**DB_CONFIG)
+    cursor = conn.cursor()
+
+    # Query for min, avg, and max values grouped by sensor
+    cursor.execute("""
+        SELECT 
+            sensor_id,
+            MIN(ph) AS min_ph, AVG(ph) AS avg_ph, MAX(ph) AS max_ph,
+            MIN(dissolved_oxygen) AS min_oxygen, AVG(dissolved_oxygen) AS avg_oxygen, MAX(dissolved_oxygen) AS max_oxygen,
+            MIN(carbon_dioxide_levels) AS min_co2, AVG(carbon_dioxide_levels) AS avg_co2, MAX(carbon_dioxide_levels) AS max_co2,
+            MIN(turbidity) AS min_turbidity, AVG(turbidity) AS avg_turbidity, MAX(turbidity) AS max_turbidity
+        FROM water_data
+        GROUP BY sensor_id
+        ORDER BY sensor_id
+    """)
+    data = cursor.fetchall()
+    conn.close()
+
+    # Structure the data as JSON
+    stats = []
+    for row in data:
+        stats.append({
+            "sensor_id": row[0],
+            "ph": {"min": row[1], "avg": row[2], "max": row[3]},
+            "dissolved_oxygen": {"min": row[4], "avg": row[5], "max": row[6]},
+            "co2_levels": {"min": row[7], "avg": row[8], "max": row[9]},
+            "turbidity": {"min": row[10], "avg": row[11], "max": row[12]}
         })
 
-    # Return the data as JSON
-    return jsonify(data)
+    return jsonify(stats)
 
-#trimite datele la cloud pt gateway 
-@app.route("/api/data", methods=["POST"])
-def receive_data():
-    sensor_data = request.json
-    print(f"Received Data: {sensor_data}")
-
-    # Save to Database
-    save_to_db(sensor_data)
-
-    # Check for unsafe values
-    warnings = check_water_quality(sensor_data)
-    if warnings:
-        alert_message = {
-            "sensor_id": sensor_data["sensor_id"],
-            "timestamp": sensor_data["timestamp"],
-            "warnings": warnings
-        }
-        socketio.emit("alert", alert_message)
-        print("Alert Sent:", alert_message)
-
-    # Emit new data event
-    socketio.emit("new_data", sensor_data)
-
-    return jsonify({"message": "Data saved"}), 200
+@app.route('/summary', methods=["GET"])
+def summary():
+    return render_template("summary.html")
 
 
 if __name__ == "__main__":
